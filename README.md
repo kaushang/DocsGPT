@@ -1,22 +1,29 @@
-# WebMind Chat
+# DocsGPT
 
-Chat with the content of any public webpage.
+Upload a `.pdf` or `.txt` document and chat with an AI assistant grounded in that document's content.
 
-Paste a URL, load the page, and ask follow-up questions grounded in that page's text.
+This project uses a FastAPI backend for document ingestion + retrieval and a React frontend for the chat interface.
+
+## Features
+
+- Upload `.pdf` and `.txt` files from the UI
+- Automatic chunking and vector storage per document session
+- Ask follow-up questions against the uploaded document context
+- Simple chat interface with markdown-friendly assistant responses
 
 ## Tech Stack
 
-- Backend: Python, FastAPI, LangChain, Google Gemini, BeautifulSoup4, httpx
+- Backend: Python, FastAPI, LangChain, ChromaDB, Sentence Transformers, Google Gemini
 - Frontend: React (Vite), Tailwind CSS
 
 ## Project Structure
 
-- `backend/` - API, scraping, LLM integration
-- `frontend/` - chat UI and streaming client
+- `backend/` - API, document parsing, chunking, retrieval, and answer generation
+- `frontend/` - upload flow and chat UI
 
 ## Local Development
 
-### 1) Backend
+### 1) Backend setup
 
 From `backend/`:
 
@@ -27,15 +34,19 @@ pip install -r requirements.txt
 copy .env.example .env
 ```
 
-Set `GEMINI_API_KEY` in `.env`.
+Set your Gemini key in `backend/.env`:
 
-Run:
+```env
+GEMINI_API_KEY=your_google_gemini_api_key_here
+```
+
+Run the backend:
 
 ```bash
 uvicorn main:app --reload --host 0.0.0.0 --port 8000
 ```
 
-### 2) Frontend
+### 2) Frontend setup
 
 From `frontend/`:
 
@@ -47,33 +58,31 @@ npm run dev
 
 Open `http://localhost:5173`.
 
-## Production Notes
-
-- Configure `backend/.env`:
-  - `GEMINI_API_KEY=<your_key>`
-  - `CORS_ALLOWED_ORIGINS=https://your-frontend-domain.com`
-- Configure `frontend/.env`:
-  - `VITE_API_URL=https://your-backend-domain.com`
-- Run frontend build:
-  - `npm run build` (outputs to `frontend/dist/`)
-- Run backend with a process manager (for example `gunicorn` or `uvicorn` under systemd/container).
-
 ## API Endpoints
 
-- `POST /load-url`
-  - Body: `{ "url": "https://example.com/article" }`
-  - Returns session id + page title
+- `GET /health`
+  - Health check endpoint
+- `POST /upload-document`
+  - Form-data: `file` (`.pdf` or `.txt`)
+  - Returns: `session_id`, `filename`, `chunks_created`, status message
 - `POST /chat`
-  - Body: `{ "session_id": "<id>", "message": "question" }`
-  - Streams NDJSON chunks (`token`, `error`, `done`)
+  - JSON body: `{ "session_id": "<id>", "message": "your question" }`
+  - Returns: `{ "answer": "..." }`
 
 ## Environment Variables
 
 ### Backend (`backend/.env`)
 
 - `GEMINI_API_KEY` (required)
-- `CORS_ALLOWED_ORIGINS` (optional, comma-separated list)
+- `CORS_ALLOWED_ORIGINS` (optional, default `*`; use comma-separated origins in production)
 
 ### Frontend (`frontend/.env`)
 
-- `VITE_API_URL` (optional, defaults to `http://localhost:8000`)
+- `VITE_API_URL` (optional, default `http://localhost:8000`)
+
+## Production Notes
+
+- Set strict `CORS_ALLOWED_ORIGINS` in production (avoid `*`)
+- Point frontend `VITE_API_URL` to your deployed backend URL
+- Build frontend with `npm run build` (output: `frontend/dist/`)
+- Run backend with a process manager (for example `uvicorn`/`gunicorn` under a supervisor or container)
