@@ -1,7 +1,12 @@
 import { useEffect, useRef } from "react";
 import MessageBubble from "./MessageBubble";
 
-const EXAMPLE_PROMPTS = ["Summarize this page", "What is the main topic?", "List the key points", "What should I remember?"];
+const EXAMPLE_PROMPTS = [
+  "Summarize this document",
+  "What are the key findings?",
+  "List the main topics covered",
+  "What conclusions does this document make?",
+];
 
 export default function ChatWindow({ messages, onPickPrompt, isGenerating }) {
   const bottomRef = useRef(null);
@@ -16,7 +21,7 @@ export default function ChatWindow({ messages, onPickPrompt, isGenerating }) {
     <div className="flex-1 overflow-y-auto rounded-xl border border-line bg-panel/50 p-4">
       {!hasMessages ? (
         <div className="flex h-full flex-col items-center justify-center text-center">
-          <p className="mb-3 text-slate-300">Ask questions about the loaded page.</p>
+          <p className="mb-3 text-slate-300">Ask questions about the loaded document.</p>
           <div className="flex flex-wrap justify-center gap-2">
             {EXAMPLE_PROMPTS.map((prompt) => (
               <button

@@ -2,6 +2,8 @@ fastapi
 uvicorn[standard]
 langchain
 langchain-google-genai
-beautifulsoup4
-httpx
 python-dotenv
+pymupdf
+chromadb
+langchain-community
+sentence-transformers

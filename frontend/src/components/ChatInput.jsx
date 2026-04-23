@@ -1,5 +1,5 @@
 export default function ChatInput({ value, onChange, onSend, disabled, isGenerating }) {
-  const placeholder = disabled ? "Load a URL first" : "Ask anything about this page...";
+  const placeholder = disabled ? "Upload a document to start asking questions..." : "Ask anything about this document...";
 
   return (
     <div className="rounded-xl border border-line bg-panel/70 p-3">

@@ -1,20 +1,21 @@
 from __future__ import annotations
 
-import json
-import logging
 import os
 from uuid import uuid4
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, File, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import StreamingResponse
-from pydantic import BaseModel, HttpUrl
+from pydantic import BaseModel
 
-from llm import stream_answer
-from scraper import ScrapeError, fetch_page_content
+from rag import (
+    chunk_and_store,
+    extract_text_from_pdf,
+    extract_text_from_txt,
+    has_session,
+    retrieve_and_answer,
+)
 
-app = FastAPI(title="WebMind API")
-logger = logging.getLogger(__name__)
+app = FastAPI(title="DocsGPT API")
 
 
 def _cors_origins() -> list[str]:
@@ -31,13 +32,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-sessions: dict[str, dict] = {}
-
-
-class LoadUrlRequest(BaseModel):
-    url: HttpUrl
-
-
 class ChatRequest(BaseModel):
     session_id: str
     message: str
@@ -48,53 +42,50 @@ def health():
     return {"ok": True}
 
 
-@app.post("/load-url")
-async def load_url(payload: LoadUrlRequest):
-    try:
-        page = await fetch_page_content(str(payload.url))
-    except ScrapeError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
+@app.post("/upload-document")
+async def upload_document(file: UploadFile = File(...)):
+    if not file.filename:
+        raise HTTPException(status_code=400, detail="Please upload a valid .pdf or .txt file.")
 
+    filename = file.filename
+    extension = filename.lower().rsplit(".", 1)[-1] if "." in filename else ""
+    if extension not in {"pdf", "txt"}:
+        raise HTTPException(status_code=400, detail="Only .pdf and .txt files are supported.")
+
+    file_bytes = await file.read()
     session_id = str(uuid4())
-    sessions[session_id] = {
-        "url": str(payload.url),
-        "title": page["title"],
-        "content": page["content"],
-        "history": [],
-    }
+    if extension == "pdf":
+        extracted_text = extract_text_from_pdf(file_bytes)
+    else:
+        extracted_text = extract_text_from_txt(file_bytes)
+
+    if len(extracted_text.strip()) < 100:
+        raise HTTPException(status_code=400, detail="Could not extract readable text from this file")
+
+    chunks_created = chunk_and_store(extracted_text, session_id)
+    if chunks_created == 0:
+        raise HTTPException(status_code=400, detail="Could not extract readable text from this file")
 
     return {
         "session_id": session_id,
-        "title": page["title"],
-        "message": "Page loaded successfully.",
+        "filename": filename,
+        "chunks_created": chunks_created,
+        "message": "Document loaded successfully",
     }
 
 
 @app.post("/chat")
 async def chat(payload: ChatRequest):
-    session = sessions.get(payload.session_id)
-    if not session:
-        raise HTTPException(status_code=404, detail="Session not found. Load a URL first.")
+    if not has_session(payload.session_id):
+        raise HTTPException(status_code=404, detail="Session not found. Please upload a document first.")
 
     question = payload.message.strip()
     if not question:
         raise HTTPException(status_code=400, detail="Message cannot be empty.")
 
-    session["history"].append({"role": "user", "content": question})
+    try:
+        answer = retrieve_and_answer(question, payload.session_id)
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Failed to generate response: {exc}") from exc
 
-    async def event_stream():
-        answer_parts: list[str] = []
-        try:
-            async for token in stream_answer(session["content"], question, session["history"]):
-                answer_parts.append(token)
-                yield json.dumps({"type": "token", "value": token}) + "\n"
-        except Exception as exc:
-            logger.exception("Chat generation failed")
-            yield json.dumps({"type": "error", "value": f"Failed to generate response: {exc}"}) + "\n"
-            return
-
-        full_answer = "".join(answer_parts).strip() or "I don't know."
-        session["history"].append({"role": "assistant", "content": full_answer})
-        yield json.dumps({"type": "done"}) + "\n"
-
-    return StreamingResponse(event_stream(), media_type="application/x-ndjson")
+    return {"answer": answer}
