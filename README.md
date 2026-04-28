@@ -13,7 +13,7 @@ This project uses a FastAPI backend for document ingestion + retrieval and a Rea
 
 ## Tech Stack
 
-- Backend: Python, FastAPI, LangChain, ChromaDB, Sentence Transformers, Google Gemini
+- Backend: Python, FastAPI, LangChain, ChromaDB, Google Gemini
 - Frontend: React (Vite), Tailwind CSS
 
 ## Project Structure
