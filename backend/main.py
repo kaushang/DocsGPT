@@ -17,17 +17,23 @@ from rag import (
 
 app = FastAPI(title="DocsGPT API")
 
+DEFAULT_CORS_ORIGINS = "http://localhost:5173,https://docsgpt-ten.vercel.app"
+
 
 def _cors_origins() -> list[str]:
-    raw = os.getenv("CORS_ALLOWED_ORIGINS", "*")
+    raw = os.getenv("CORS_ALLOWED_ORIGINS", DEFAULT_CORS_ORIGINS)
     if raw.strip() == "*":
         return ["*"]
     return [item.strip() for item in raw.split(",") if item.strip()]
 
+
+def _cors_allow_credentials() -> bool:
+    return os.getenv("CORS_ALLOWED_ORIGINS", DEFAULT_CORS_ORIGINS).strip() != "*"
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=_cors_origins(),
-    allow_credentials=True,
+    allow_credentials=_cors_allow_credentials(),
     allow_methods=["*"],
     allow_headers=["*"],
 )

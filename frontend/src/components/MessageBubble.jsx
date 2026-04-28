@@ -13,7 +13,7 @@ export default function MessageBubble({ role, content, isTyping = false }) {
       >
         {!isUser ? (
           <div className="mb-2 flex items-center gap-2 text-xs text-slate-400">
-            <span className="flex h-5 w-5 items-center justify-center rounded-full bg-slate-700 text-[11px] font-semibold">W</span>
+            <span className="flex h-5 w-5 items-center justify-center rounded-full bg-slate-700 text-[11px] font-semibold">D</span>
             DocsGPT
           </div>
         ) : null}
