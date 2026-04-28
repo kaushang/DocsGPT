@@ -1,16 +1,16 @@
 from __future__ import annotations
 
 import os
-from typing import Optional
 
 import chromadb
 import fitz
 from dotenv import load_dotenv
+from langchain_google_genai.embeddings import GoogleGenerativeAIEmbeddings
+from langchain_community.vectorstores import Chroma
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_core.output_parsers import StrOutputParser
 from langchain_google_genai import ChatGoogleGenerativeAI
-from sentence_transformers import SentenceTransformer
 
 load_dotenv()
 
@@ -33,14 +33,24 @@ User Question:
 
 
 _chroma_client = chromadb.Client()
-_embedding_model: Optional[SentenceTransformer] = None
+_embeddings: GoogleGenerativeAIEmbeddings | None = None
 
 
-def _get_embedding_model() -> SentenceTransformer:
-    global _embedding_model
-    if _embedding_model is None:
-        _embedding_model = SentenceTransformer("all-MiniLM-L6-v2")
-    return _embedding_model
+def _get_embeddings() -> GoogleGenerativeAIEmbeddings:
+    global _embeddings
+    if _embeddings is None:
+        _embeddings = GoogleGenerativeAIEmbeddings(
+            model="models/gemini-embedding-2-preview",
+        )
+    return _embeddings
+
+
+def _get_vectorstore(session_id: str) -> Chroma:
+    return Chroma(
+        collection_name=session_id,
+        client=_chroma_client,
+        embedding_function=_get_embeddings(),
+    )
 
 
 def _make_llm() -> ChatGoogleGenerativeAI:
@@ -75,14 +85,11 @@ def chunk_and_store(text: str, session_id: str) -> int:
     if not text_chunks:
         return 0
 
-    embedding_model = _get_embedding_model()
-    embeddings = embedding_model.encode(text_chunks).tolist()
-
-    collection = _chroma_client.get_or_create_collection(name=session_id)
+    vectorstore = _get_vectorstore(session_id)
     ids = [f"{session_id}-{idx}" for idx in range(len(text_chunks))]
     metadatas = [{"chunk_index": idx} for idx in range(len(text_chunks))]
 
-    collection.add(ids=ids, documents=text_chunks, embeddings=embeddings, metadatas=metadatas)
+    vectorstore.add_texts(texts=text_chunks, ids=ids, metadatas=metadatas)
     return len(text_chunks)
 
 
@@ -95,13 +102,8 @@ def has_session(session_id: str) -> bool:
 
 
 def retrieve_and_answer(question: str, session_id: str) -> str:
-    collection = _chroma_client.get_collection(name=session_id)
-    embedding_model = _get_embedding_model()
-
-    question_embedding = embedding_model.encode([question]).tolist()[0]
-    results = collection.query(query_embeddings=[question_embedding], n_results=4)
-    documents = results.get("documents", [[]])
-    top_chunks = documents[0] if documents else []
+    vectorstore = _get_vectorstore(session_id)
+    top_chunks = [doc.page_content for doc in vectorstore.similarity_search(question, k=4)]
     context = "\n\n".join(top_chunks).strip()
 
     prompt = ChatPromptTemplate.from_template(SYSTEM_PROMPT.strip())
